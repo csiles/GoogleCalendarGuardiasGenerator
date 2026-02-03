@@ -26,6 +26,10 @@ wheels/
 # CSV generados
 guardias-support.csv
 
+# JSON data (calendarios persistidos)
+json/calendarios.json
+json/google_token.json
+
 # IDE
 .vscode/
 .idea/
