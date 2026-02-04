@@ -1,6 +1,6 @@
-Pilar
-Isa
-Romane
-Yannick
-Mayra
-Alberto
+Pilar,#3498db
+Isa,#e74c3c
+Romane,#2ecc71
+Yannick,#f39c12
+Mayra,#9b59b6
+Alberto,#1abc9c

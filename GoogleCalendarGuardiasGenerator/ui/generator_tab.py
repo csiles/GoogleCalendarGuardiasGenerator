@@ -7,6 +7,7 @@ from tkinter import ttk, messagebox
 from datetime import datetime, timedelta
 import calendar
 import csv
+import os
 from typing import Dict, List
 from utils.file_utils import load_tecnicos, load_festivos, get_technician_colors
 
@@ -89,17 +90,38 @@ class GeneratorTab(tk.Frame):
         frame = tk.Frame(block, bg="#ecf0f1")
         frame.pack(padx=5, pady=5)
         
+        # Calcular fechas por defecto
+        today = datetime.now()
+        # Inicio: día 01 del mes siguiente
+        if today.month == 12:
+            fecha_inicio = datetime(today.year + 1, 1, 1)
+        else:
+            fecha_inicio = datetime(today.year, today.month + 1, 1)
+        
+        # Fin: último día de +3 meses desde inicio
+        mes_fin = fecha_inicio.month + 2
+        año_fin = fecha_inicio.year
+        while mes_fin > 12:
+            mes_fin -= 12
+            año_fin += 1
+        
+        # Último día del mes fin
+        if mes_fin == 12:
+            fecha_fin = datetime(año_fin, 12, 31)
+        else:
+            fecha_fin = datetime(año_fin, mes_fin + 1, 1) - timedelta(days=1)
+        
         # Fecha inicio
         tk.Label(frame, text="Inicio:", font=("Arial", 8), 
                 bg="#ecf0f1").grid(row=0, column=0, sticky="w", padx=2, pady=1)
-        self.fecha_inicio_var = tk.StringVar(value="01/01/2026")
+        self.fecha_inicio_var = tk.StringVar(value=fecha_inicio.strftime("%d/%m/%Y"))
         tk.Entry(frame, textvariable=self.fecha_inicio_var,
                 font=("Arial", 8), width=10).grid(row=0, column=1, padx=2, pady=1)
         
         # Fecha fin
         tk.Label(frame, text="Fin:", font=("Arial", 8), 
                 bg="#ecf0f1").grid(row=1, column=0, sticky="w", padx=2, pady=1)
-        self.fecha_fin_var = tk.StringVar(value="31/12/2026")
+        self.fecha_fin_var = tk.StringVar(value=fecha_fin.strftime("%d/%m/%Y"))
         tk.Entry(frame, textvariable=self.fecha_fin_var,
                 font=("Arial", 8), width=10).grid(row=1, column=1, padx=2, pady=1)
     
@@ -113,11 +135,9 @@ class GeneratorTab(tk.Frame):
         grid = tk.Frame(block, bg="#ecf0f1")
         grid.pack(padx=5, pady=5, expand=True)
         
-        colores = ["#3498db", "#e74c3c", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c"]
-        
         # Grid 1 fila x 6 columnas
         for i, tecnico in enumerate(self.tecnicos):
-            color = colores[i % len(colores)]
+            color = self.colors.get(tecnico, "#3498db")  # Color desde archivo o default
             btn = tk.Label(grid, text=tecnico, font=("Arial", 9, "bold"),
                           bg=color, fg="white", relief=tk.RAISED, bd=2,
                           cursor="hand2", padx=10, pady=5, width=10)
@@ -402,10 +422,8 @@ class GeneratorTab(tk.Frame):
                 bg="#34495e", fg="white", width=5, anchor="center").pack(side=tk.LEFT)
         
         # Filas
-        colores = ["#3498db", "#e74c3c", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c"]
         for i, (tecnico, info) in enumerate(sorted(counter.items())):
-            idx = self.tecnicos.index(tecnico) if tecnico in self.tecnicos else 0
-            color = colores[idx % len(colores)]
+            color = self.colors.get(tecnico, "#3498db")  # Color desde archivo
             
             row_bg = "#ecf0f1" if i % 2 == 0 else "white"
             row = tk.Frame(self.stats_frame, bg=row_bg, relief=tk.FLAT, bd=1)
@@ -504,7 +522,6 @@ class GeneratorTab(tk.Frame):
             indice_tecnico = 0
         
         ultimo_tecnico_asignado = None
-        colores = ["#3498db", "#e74c3c", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c"]
         
         for bloque in bloques:
             num_dias = len(bloque)
@@ -518,7 +535,7 @@ class GeneratorTab(tk.Frame):
             
             if num_dias <= 2:
                 tecnico = self.tecnicos[indice_tecnico]
-                color = colores[indice_tecnico % 6]
+                color = self.colors.get(tecnico, "#3498db")  # Color desde archivo
                 for dia in bloque:
                     self.asignaciones[dia] = {'tecnico': tecnico, 'color': color}
                 ultimo_tecnico_asignado = tecnico
@@ -526,7 +543,7 @@ class GeneratorTab(tk.Frame):
             
             elif num_dias == 3:
                 tecnico = self.tecnicos[indice_tecnico]
-                color = colores[indice_tecnico % 6]
+                color = self.colors.get(tecnico, "#3498db")  # Color desde archivo
                 for dia in bloque:
                     self.asignaciones[dia] = {'tecnico': tecnico, 'color': color}
                 ultimo_tecnico_asignado = tecnico
@@ -539,7 +556,7 @@ class GeneratorTab(tk.Frame):
                         indice_tecnico = (indice_tecnico + 1) % len(self.tecnicos)
                     
                     tecnico = self.tecnicos[indice_tecnico]
-                    color = colores[indice_tecnico % 6]
+                    color = self.colors.get(tecnico, "#3498db")  # Color desde archivo
                     
                     dias_asignar = min(2, num_dias - i)
                     for j in range(dias_asignar):
@@ -593,26 +610,50 @@ class GeneratorTab(tk.Frame):
             })
             i += 1
         
+        # Crear carpeta csv si no existe
+        csv_dir = os.path.join(os.path.dirname(__file__), "..", "csv")
+        os.makedirs(csv_dir, exist_ok=True)
+        
+        # Rutas de archivos
         nombre_archivo = "guardias-support.csv"
-        with open(nombre_archivo, mode='w', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file, delimiter=',')
-            writer.writerow([
-                "Subject", "Start Date", "Start Time", "End Date", "End Time",
-                "All Day Event", "Description", "Location", "Private"
-            ])
+        csv_path = os.path.abspath(os.path.join(csv_dir, nombre_archivo))
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", nombre_archivo)
+        
+        # Generar contenido CSV
+        csv_content = []
+        csv_content.append([
+            "Subject", "Start Date", "Start Time", "End Date", "End Time",
+            "All Day Event", "Description", "Location", "Private"
+        ])
+        
+        for evento in eventos:
+            # End Date debe ser el día siguiente a fecha_fin
+            end_date = evento['fecha_fin'] + timedelta(days=1)
             
-            for evento in eventos:
-                writer.writerow([
-                    evento['subject'],
-                    evento['fecha_inicio'].strftime("%d/%m/%Y"),
-                    "",
-                    evento['fecha_fin'].strftime("%d/%m/%Y"),
-                    "",
-                    "True",
-                    "",
-                    "",
-                    "False"
-                ])
+            csv_content.append([
+                evento['subject'],
+                evento['fecha_inicio'].strftime("%Y-%m-%d"),
+                "00:00:00",
+                end_date.strftime("%Y-%m-%d"),
+                "00:00:00",
+                "True",
+                "",
+                "",
+                "False"
+            ])
+        
+        # Guardar en carpeta csv
+        with open(csv_path, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file, delimiter=',')
+            writer.writerows(csv_content)
+        
+        # Guardar copia en el escritorio
+        with open(desktop_path, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file, delimiter=',')
+            writer.writerows(csv_content)
         
         messagebox.showinfo("Éxito",
-            f"✅ CSV exportado correctamente\n\nArchivo: {nombre_archivo}\nEventos: {len(eventos)}")
+            f"✅ CSV exportado correctamente\n\n"
+            f"📁 Carpeta proyecto: {csv_path}\n"
+            f"🖥️ Escritorio: {desktop_path}\n\n"
+            f"Eventos generados: {len(eventos)}")

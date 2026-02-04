@@ -5,7 +5,7 @@ Gestor de calendarios históricos y futuros con persistencia JSON
 import json
 import os
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import hashlib
 import logging
@@ -31,7 +31,14 @@ class CalendarManager:
         if os.path.exists(self.data_file):
             try:
                 with open(self.data_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    
+                # Validar que tenga las claves necesarias
+                if 'meses' not in data or 'fuentes_csv' not in data:
+                    logger.warning(f"Estructura de datos incompleta en {self.data_file}, regenerando...")
+                    return self._get_empty_structure()
+                
+                return data
             except Exception as e:
                 logger.error(f"Error cargando {self.data_file}: {e}")
                 return self._get_empty_structure()
@@ -95,28 +102,64 @@ class CalendarManager:
             # Procesar cada fila
             for idx, row in enumerate(rows):
                 try:
-                    # Parsear fecha en formato DD/MM/YYYY
-                    fecha_str = row['Start Date']
-                    fecha_obj = datetime.strptime(fecha_str, '%d/%m/%Y')
-                    fecha = fecha_obj.strftime('%Y-%m-%d')
+                    # Parsear fechas en formato YYYY-MM-DD
+                    fecha_inicio_str = row['Start Date']
+                    fecha_fin_str = row['End Date']
                     
-                    # Crear evento
-                    evento = {
-                        'id': self._generate_event_id(fecha, row['Subject']),
-                        'titulo': str(row['Subject']),
-                        'tipo': 'guardia',
-                        'descripcion': str(row.get('Description', '')),
-                        'all_day': row.get('All Day Event', 'True') == 'True',
-                        'origen': 'csv_import',
-                        'fecha_importacion': datetime.now().isoformat(),
-                        'archivo_origen': os.path.basename(filepath)
-                    }
+                    fecha_inicio_obj = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
+                    fecha_fin_obj = datetime.strptime(fecha_fin_str, '%Y-%m-%d')
                     
-                    # Agregar evento
-                    if self.add_event(fecha, evento):
-                        stats['importados'] += 1
-                    else:
-                        stats['duplicados'] += 1
+                    # Extraer nombre del técnico del Subject (formato: "Guardia - Nombre" o "Guardia TARDE - Nombre")
+                    subject = str(row['Subject'])
+                    tecnico = subject.split(' - ')[-1].strip() if ' - ' in subject else subject
+                    
+                    # Para eventos All Day, el End Date es exclusivo (hasta el inicio de ese día, no lo incluye)
+                    is_all_day = row.get('All Day Event', 'True') == 'True'
+                    
+                    # Crear evento para cada día en el rango
+                    fecha_actual = fecha_inicio_obj
+                    # Para All Day events, End Date es exclusivo (no se incluye)
+                    fecha_limite = fecha_fin_obj if not is_all_day else fecha_fin_obj - timedelta(days=1)
+                    
+                    while fecha_actual <= fecha_limite:
+                        fecha = fecha_actual.strftime('%Y-%m-%d')
+                        
+                        # Verificar si ya existe un evento en esta fecha
+                        year_month = fecha[:7]
+                        day = fecha[8:10]
+                        existing_tecnico = None
+                        
+                        if year_month in self.data['meses']:
+                            if day in self.data['meses'][year_month]['dias']:
+                                eventos_dia = self.data['meses'][year_month]['dias'][day]['eventos']
+                                if eventos_dia:
+                                    existing_tecnico = eventos_dia[0].get('tecnico')
+                        
+                        # Solo añadir si no hay evento previo en esta fecha
+                        if not existing_tecnico:
+                            evento = {
+                                'id': self._generate_event_id(fecha, subject),
+                                'titulo': subject,
+                                'tecnico': tecnico,
+                                'tipo': 'guardia',
+                                'descripcion': str(row.get('Description', '')),
+                                'all_day': is_all_day,
+                                'origen': 'csv_import',
+                                'fecha_importacion': datetime.now().isoformat(),
+                                'archivo_origen': os.path.basename(filepath)
+                            }
+                            
+                            # Agregar evento
+                            if self.add_event(fecha, evento):
+                                stats['importados'] += 1
+                            else:
+                                stats['duplicados'] += 1
+                        else:
+                            logger.warning(f"Conflicto en {fecha}: ya existe guardia de {existing_tecnico}, ignorando {tecnico}")
+                            stats['duplicados'] += 1
+                        
+                        # Siguiente día
+                        fecha_actual += timedelta(days=1)
                         
                 except Exception as e:
                     stats['errores'] += 1
@@ -285,22 +328,28 @@ class CalendarManager:
         
     def get_statistics(self) -> dict:
         """Obtiene estadísticas globales"""
-        total_meses = len(self.data['meses'])
+        # Asegurar que la estructura existe
+        if 'meses' not in self.data:
+            self.data['meses'] = {}
+        if 'fuentes_csv' not in self.data:
+            self.data['fuentes_csv'] = []
+        
+        total_meses = len(self.data.get('meses', {}))
         total_eventos = sum(
-            m['estadisticas_mes']['total_eventos'] 
-            for m in self.data['meses'].values()
+            m.get('estadisticas_mes', {}).get('total_eventos', 0)
+            for m in self.data.get('meses', {}).values()
         )
         
         # Eventos por tipo
         eventos_por_tipo = {}
-        for month_data in self.data['meses'].values():
-            for tipo, count in month_data['estadisticas_mes'].get('por_tipo', {}).items():
+        for month_data in self.data.get('meses', {}).values():
+            for tipo, count in month_data.get('estadisticas_mes', {}).get('por_tipo', {}).items():
                 eventos_por_tipo[tipo] = eventos_por_tipo.get(tipo, 0) + count
                 
         return {
             'total_meses_con_datos': total_meses,
             'total_eventos': total_eventos,
             'eventos_por_tipo': eventos_por_tipo,
-            'fuentes_csv': len(self.data['fuentes_csv']),
-            'ultima_actualizacion': self.data['last_updated']
+            'fuentes_csv': len(self.data.get('fuentes_csv', [])),
+            'ultima_actualizacion': self.data.get('last_updated', datetime.now().isoformat())
         }

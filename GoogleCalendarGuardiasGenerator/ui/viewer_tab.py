@@ -7,6 +7,7 @@ from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
 from models.calendar_manager import CalendarManager
 from ui.components.multi_month_viewer import MultiMonthViewer
+from utils.file_utils import get_technician_colors, load_tecnicos
 
 
 class ViewerTab(tk.Frame):
@@ -14,6 +15,15 @@ class ViewerTab(tk.Frame):
     
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
+        
+        # Cargar colores de técnicos
+        self.colors = get_technician_colors()
+        
+        # Cargar lista de técnicos
+        self.tecnicos = load_tecnicos()
+        
+        # Técnico seleccionado para drag
+        self.selected_tecnico = None
         
         # Inicializar CalendarManager
         self.calendar_manager = CalendarManager()
@@ -54,11 +64,6 @@ class ViewerTab(tk.Frame):
         tk.Button(btn_frame, text="🔄 Actualizar", command=self._refresh_view,
                  bg="#2ecc71", fg="white", font=("Arial", 10, "bold"),
                  relief=tk.RAISED, bd=3, cursor="hand2", padx=15, pady=5).pack(side=tk.LEFT, padx=5)
-        
-        # Botón estadísticas
-        tk.Button(btn_frame, text="📊 Estadísticas", command=self._show_stats,
-                 bg="#9b59b6", fg="white", font=("Arial", 10, "bold"),
-                 relief=tk.RAISED, bd=3, cursor="hand2", padx=15, pady=5).pack(side=tk.LEFT, padx=5)
     
     def _create_viewer(self):
         """Crea el visor de múltiples meses"""
@@ -69,9 +74,21 @@ class ViewerTab(tk.Frame):
         self.multi_month_viewer = MultiMonthViewer(
             viewer_container,
             self.calendar_manager,
-            num_months=7
+            colors=self.colors,
+            num_months=7,
+            parent_tab=self  # Pasar referencia para callbacks
         )
         self.multi_month_viewer.pack(fill=tk.BOTH, expand=True)
+    
+    def _start_drag(self, tecnico):
+        """Inicia el drag de un técnico"""
+        self.selected_tecnico = tecnico
+        self.multi_month_viewer.set_dragging_tecnico(tecnico)
+    
+    def _end_drag(self):
+        """Finaliza el drag"""
+        self.selected_tecnico = None
+        self.multi_month_viewer.set_dragging_tecnico(None)
     
     def _create_status_bar(self):
         """Crea la barra de estado"""
@@ -123,24 +140,6 @@ class ViewerTab(tk.Frame):
         self.multi_month_viewer.refresh()
         self._update_status()
         messagebox.showinfo("Actualizado", "Vista actualizada correctamente")
-    
-    def _show_stats(self):
-        """Muestra estadísticas globales"""
-        stats = self.calendar_manager.get_statistics()
-        
-        mensaje = "📊 Estadísticas Globales\n\n"
-        mensaje += f"Meses con datos: {stats['total_meses_con_datos']}\n"
-        mensaje += f"Total eventos: {stats['total_eventos']}\n"
-        mensaje += f"Fuentes CSV: {stats['fuentes_csv']}\n\n"
-        
-        if stats['eventos_por_tipo']:
-            mensaje += "Eventos por tipo:\n"
-            for tipo, count in stats['eventos_por_tipo'].items():
-                mensaje += f"  - {tipo}: {count}\n"
-        
-        mensaje += f"\nÚltima actualización:\n{stats['ultima_actualizacion'][:19]}"
-        
-        messagebox.showinfo("Estadísticas", mensaje)
     
     def _update_status(self):
         """Actualiza la barra de estado"""
