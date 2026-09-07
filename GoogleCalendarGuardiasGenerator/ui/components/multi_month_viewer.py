@@ -133,6 +133,12 @@ class MultiMonthViewer(tk.Frame):
         """Establece el técnico que se está arrastrando"""
         self.dragging_tecnico = tecnico
     
+    def _tecnico_style(self, tecnico):
+        """Prefijo y color para el técnico; los que ya no están en tecnicos.txt se marcan con calavera"""
+        if tecnico and tecnico not in self.colors:
+            return "💀 ", "#000000"
+        return "", self.colors.get(tecnico, "#3498db")
+    
     def _start_drag(self, event, tecnico, color):
         """Inicia arrastre de técnico"""
         self.dragging = {'tecnico': tecnico, 'color': color}
@@ -406,9 +412,9 @@ class MultiMonthViewer(tk.Frame):
                     if eventos:
                         for evento in eventos[:2]:  # Máximo 2 eventos visibles
                             # Mostrar el nombre del técnico si está disponible, sino el título
-                            texto = evento.get('tecnico', evento.get('titulo', 'Evento'))[:15]
                             tecnico = evento.get('tecnico', '')
-                            color = self.colors.get(tecnico, "#3498db")
+                            prefijo, color = self._tecnico_style(tecnico)
+                            texto = f"{prefijo}{evento.get('tecnico', evento.get('titulo', 'Evento'))}"[:15]
                             event_label = tk.Label(day_cell, text=texto, 
                                     font=("Arial", 7),
                                     bg=color, fg="white",
@@ -470,13 +476,13 @@ class MultiMonthViewer(tk.Frame):
             
             # Filas de técnicos
             for i, (tecnico, info) in enumerate(sorted(counter.items())):
-                color = self.colors.get(tecnico, "#3498db")
+                prefijo, color = self._tecnico_style(tecnico)
                 row_bg = "#ecf0f1" if i % 2 == 0 else "white"
                 
                 row = tk.Frame(stats_frame, bg=row_bg)
                 row.pack(fill=tk.X)
                 
-                tk.Label(row, text=tecnico, font=("Arial", 7, "bold"),
+                tk.Label(row, text=f"{prefijo}{tecnico}", font=("Arial", 7, "bold"),
                         bg=color, fg="white", width=8, anchor="w", padx=3).pack(side=tk.LEFT)
                 
                 dias_str = ",".join(map(str, sorted(info['dias'])))

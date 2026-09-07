@@ -333,20 +333,9 @@ class ViewerTab(tk.Frame):
         thread.start()
     
     def _get_pull_date_range(self):
-        """Calcula el rango de fechas a descargar desde Google: el mismo que cubren los datos locales,
-        o una ventana por defecto si no hay datos locales todavía"""
-        meses = self.calendar_manager.data.get('meses', {})
-        if meses:
-            keys = sorted(meses.keys())
-            start = datetime.strptime(f"{keys[0]}-01", "%Y-%m-%d")
-            end_year, end_month = map(int, keys[-1].split('-'))
-            if end_month == 12:
-                end = datetime(end_year + 1, 1, 1) - timedelta(days=1)
-            else:
-                end = datetime(end_year, end_month + 1, 1) - timedelta(days=1)
-        else:
-            start = datetime.now() - timedelta(days=30)
-            end = datetime.now() + timedelta(days=180)
+        """Rango fijo de descarga desde Google: siempre los últimos 12 meses hasta hoy"""
+        end = datetime.now()
+        start = end - timedelta(days=365)
         return start, end
     
     def _sync_from_google(self):
@@ -364,8 +353,8 @@ class ViewerTab(tk.Frame):
         confirm = messagebox.askyesno(
             "Confirmar sincronización",
             "¿Deseas descargar los eventos de Google Calendar hacia el calendario local?\n\n"
-            f"Rango: {time_min.strftime('%Y-%m-%d')} a {time_max.strftime('%Y-%m-%d')}\n"
-            "Los eventos que no coincidan con un técnico conocido te serán preguntados uno a uno."
+            f"Rango: {time_min.strftime('%Y-%m-%d')} a {time_max.strftime('%Y-%m-%d')} (últimos 12 meses)\n"
+            "Se importarán tal cual vengan de Google."
         )
         
         if not confirm:
@@ -399,15 +388,15 @@ class ViewerTab(tk.Frame):
         thread.start()
     
     def _process_pulled_events(self, eventos_google, progress_window):
-        """Clasifica los eventos descargados de Google e importa al calendario local.
-        Los que no coincidan con ningún técnico conocido se preguntan uno a uno."""
+        """Clasifica e importa los eventos descargados de Google tal cual, sin preguntar.
+        Si el título sigue el patrón 'Guardia - <técnico>' se conserva ese técnico aunque ya
+        no exista en tecnicos.txt (se marcará visualmente en el visor)."""
         if progress_window.winfo_exists():
             progress_window.destroy()
         
         importados_reconocidos = 0
+        importados_tecnico_eliminado = 0
         importados_genericos = 0
-        omitidos = 0
-        stop_asking = False
         
         for evento_google in eventos_google:
             fecha = evento_google.get('fecha')
@@ -416,32 +405,8 @@ class ViewerTab(tk.Frame):
                 continue
             
             match = re.match(r'^Guardia\s*-\s*(.+)$', titulo.strip())
-            tecnico_detectado = match.group(1).strip() if match else None
-            
-            if tecnico_detectado and tecnico_detectado in self.tecnicos:
-                tecnico = tecnico_detectado
-                tipo = 'guardia'
-            elif stop_asking:
-                omitidos += 1
-                continue
-            else:
-                respuesta = messagebox.askyesnocancel(
-                    "Evento no reconocido",
-                    f"El evento de Google '{titulo}' del {fecha} no coincide con ningún técnico conocido.\n\n"
-                    "Sí = importarlo como evento genérico\n"
-                    "No = omitir solo este evento\n"
-                    "Cancelar = omitir este y el resto de eventos no reconocidos"
-                )
-                if respuesta is None:
-                    stop_asking = True
-                    omitidos += 1
-                    continue
-                elif respuesta is False:
-                    omitidos += 1
-                    continue
-                else:
-                    tecnico = None
-                    tipo = 'otro'
+            tecnico = match.group(1).strip() if match else None
+            tipo = 'guardia' if tecnico else 'otro'
             
             evento_local = {
                 'id': self.calendar_manager._generate_event_id(fecha, titulo),
@@ -456,8 +421,10 @@ class ViewerTab(tk.Frame):
             
             added = self.calendar_manager.add_event(fecha, evento_local)
             if added:
-                if tipo == 'guardia':
+                if tecnico and tecnico in self.tecnicos:
                     importados_reconocidos += 1
+                elif tecnico:
+                    importados_tecnico_eliminado += 1
                 else:
                     importados_genericos += 1
         
@@ -471,9 +438,9 @@ class ViewerTab(tk.Frame):
             "Sincronización completada",
             f"✅ Descarga desde Google Calendar completada\n\n"
             f"Total descargados: {len(eventos_google)}\n"
-            f"Importados (técnico reconocido): {importados_reconocidos}\n"
-            f"Importados (genéricos): {importados_genericos}\n"
-            f"Omitidos: {omitidos}"
+            f"Importados (técnico activo): {importados_reconocidos}\n"
+            f"Importados (técnico ya no existe 💀): {importados_tecnico_eliminado}\n"
+            f"Importados (genéricos): {importados_genericos}"
         )
         
         self._refresh_view()
