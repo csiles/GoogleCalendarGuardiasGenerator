@@ -232,8 +232,8 @@ class GeneratorTab(tk.Frame):
         actions = tk.Frame(self.stats_container, bg="#ecf0f1")
         actions.pack(side=tk.BOTTOM, pady=10, padx=10, fill=tk.X)
         
-        tk.Button(actions, text="Auto-asignar", command=self._auto_assign,
-                 bg="#3498db", fg="white", font=("Arial", 10, "bold"),
+        tk.Button(actions, text="Crear desde GPT", command=self._abrir_gpt_dialog,
+                 bg="#9b59b6", fg="white", font=("Arial", 10, "bold"),
                  relief=tk.RAISED, bd=3, cursor="hand2", pady=6).pack(fill=tk.X, pady=3)
         
         tk.Button(actions, text="Limpiar", command=self._clear_assignments,
@@ -501,118 +501,22 @@ class GeneratorTab(tk.Frame):
             self.asignaciones = {}
             self._draw_calendar()
     
-    def _auto_assign(self):
-        """Auto-asigna técnicos automáticamente"""
-        if not messagebox.askyesno("Auto-asignar",
-            "Esto asignará automáticamente técnicos siguiendo las reglas:\n" +
-            "- No se asigna el mismo técnico a bloques separados consecutivos\n" +
-            "- Bloques de 3 días: mismo técnico\n" +
-            "- Bloques de 4+ días: se dividen en sub-bloques de 2 días\n\n¿Continuar?"):
-            return
-        
+    def _abrir_gpt_dialog(self):
+        """Abre el modal para generar guardias con GPT en el rango de fechas seleccionado"""
         try:
             fecha_inicio = datetime.strptime(self.fecha_inicio_var.get(), "%d/%m/%Y").date()
             fecha_fin = datetime.strptime(self.fecha_fin_var.get(), "%d/%m/%Y").date()
         except ValueError:
             messagebox.showerror("Error", "Formato de fecha inválido.\nUse DD/MM/AAAA")
             return
-        
+
         if fecha_fin < fecha_inicio:
             messagebox.showerror("Error", "La fecha de fin debe ser posterior a la fecha de inicio")
             return
-        
-        self.asignaciones = {}
-        
-        # Identificar días de guardia
-        dias_guardia = set()
-        fecha = fecha_inicio
-        while fecha <= fecha_fin:
-            if fecha.weekday() in [5, 6]:
-                dias_guardia.add(fecha)
-            fecha += timedelta(days=1)
-        
-        for fecha_festivo in self.festivos.keys():
-            if fecha_inicio <= fecha_festivo <= fecha_fin and fecha_festivo.weekday() < 5:
-                dias_guardia.add(fecha_festivo)
-        
-        # Agrupar en bloques consecutivos
-        dias_ordenados = sorted(dias_guardia)
-        bloques = []
-        bloque_actual = []
-        
-        for dia in dias_ordenados:
-            if not bloque_actual:
-                bloque_actual = [dia]
-            else:
-                if (dia - bloque_actual[-1]).days == 1:
-                    bloque_actual.append(dia)
-                else:
-                    bloques.append(bloque_actual)
-                    bloque_actual = [dia]
-        
-        if bloque_actual:
-            bloques.append(bloque_actual)
-        
-        # Asignar técnicos
-        ultimo_tecnico = self.ultimo_tecnico_var.get()
-        if ultimo_tecnico in self.tecnicos:
-            indice_tecnico = (self.tecnicos.index(ultimo_tecnico) + 1) % len(self.tecnicos)
-        else:
-            indice_tecnico = 0
-        
-        ultimo_tecnico_asignado = None
-        
-        for bloque in bloques:
-            num_dias = len(bloque)
-            
-            tecnico_inicial = indice_tecnico
-            if ultimo_tecnico_asignado is not None:
-                while self.tecnicos[indice_tecnico] == ultimo_tecnico_asignado:
-                    indice_tecnico = (indice_tecnico + 1) % len(self.tecnicos)
-                    if indice_tecnico == tecnico_inicial:
-                        break
-            
-            if num_dias <= 2:
-                tecnico = self.tecnicos[indice_tecnico]
-                color = self.colors.get(tecnico, "#3498db")  # Color desde archivo
-                for dia in bloque:
-                    self.asignaciones[dia] = {'tecnico': tecnico, 'color': color, 'tipo': 'guardia',
-                                              'subject': f"Guardia - {tecnico}"}
-                ultimo_tecnico_asignado = tecnico
-                indice_tecnico = (indice_tecnico + 1) % len(self.tecnicos)
-            
-            elif num_dias == 3:
-                tecnico = self.tecnicos[indice_tecnico]
-                color = self.colors.get(tecnico, "#3498db")  # Color desde archivo
-                for dia in bloque:
-                    self.asignaciones[dia] = {'tecnico': tecnico, 'color': color, 'tipo': 'guardia',
-                                              'subject': f"Guardia - {tecnico}"}
-                ultimo_tecnico_asignado = tecnico
-                indice_tecnico = (indice_tecnico + 1) % len(self.tecnicos)
-            
-            else:
-                i = 0
-                while i < num_dias:
-                    if i > 0:
-                        indice_tecnico = (indice_tecnico + 1) % len(self.tecnicos)
-                    
-                    tecnico = self.tecnicos[indice_tecnico]
-                    color = self.colors.get(tecnico, "#3498db")  # Color desde archivo
-                    
-                    dias_asignar = min(2, num_dias - i)
-                    for j in range(dias_asignar):
-                        self.asignaciones[bloque[i + j]] = {'tecnico': tecnico, 'color': color,
-                                                             'tipo': 'guardia',
-                                                             'subject': f"Guardia - {tecnico}"}
-                    
-                    ultimo_tecnico_asignado = tecnico
-                    i += dias_asignar
-        
-        self._draw_calendar()
-        messagebox.showinfo("Completado",
-            f"✅ Asignación automática completada\n\n" +
-            f"Bloques procesados: {len(bloques)}\n" +
-            f"Días asignados: {len(self.asignaciones)}")
+
+        from ui.dialogs.gpt_assign_dialog import GPTAssignDialog
+        dialog = GPTAssignDialog(self, self.tecnicos, self.festivos, fecha_inicio, fecha_fin)
+        self.wait_window(dialog)
     
     def _export_csv(self):
         """Exporta asignaciones a CSV"""

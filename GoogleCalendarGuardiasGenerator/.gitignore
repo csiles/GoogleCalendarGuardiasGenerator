@@ -35,6 +35,9 @@ json/google_config.json
 # Logs
 *.log
 
+# Credenciales / API keys
+.env
+
 # IDE
 .vscode/
 .idea/

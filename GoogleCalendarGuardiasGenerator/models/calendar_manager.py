@@ -54,6 +54,10 @@ class CalendarManager:
             "fuentes_csv": []
         }
         
+    def reload(self):
+        """Recarga los datos desde disco, descartando el estado en memoria (para ver cambios de otros procesos/pestañas)"""
+        self.data = self._load_data()
+        
     def save_data(self):
         """Persiste datos a JSON"""
         self.data["last_updated"] = datetime.now().isoformat()

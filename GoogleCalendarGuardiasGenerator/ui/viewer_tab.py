@@ -185,6 +185,7 @@ class ViewerTab(tk.Frame):
     
     def _refresh_view(self):
         """Actualiza la visualización"""
+        self.calendar_manager.reload()
         self.multi_month_viewer.reset_to_today()
         self._update_status()
     
