@@ -24,11 +24,12 @@ class GeneratorTab(tk.Frame):
         self.colors = get_technician_colors()
         
         # Estado de la aplicación
-        self.asignaciones = {}  # {fecha: {'tecnico': str, 'color': str}}
+        self.asignaciones = {}  # {fecha: {'tecnico': str, 'color': str, 'tipo': str, 'subject': str}}
         self.dragging = None
         self.drag_label = None
-        self.year = 2026
-        self.month = 3  # Marzo
+        today = datetime.now()
+        self.year = today.year
+        self.month = today.month
         
         self._create_widgets()
         self._draw_calendar()
@@ -46,7 +47,7 @@ class GeneratorTab(tk.Frame):
         header.pack(fill=tk.X, side=tk.TOP)
         header.pack_propagate(False)
         
-        tk.Label(header, text="📅 Generador de Guardias - Soporte", 
+        tk.Label(header, text="Generador de Guardias - Soporte", 
                 font=("Arial", 14, "bold"), bg="#2c3e50", fg="white").pack(pady=10)
     
     def _create_control_panel(self):
@@ -61,7 +62,10 @@ class GeneratorTab(tk.Frame):
         # Bloque 2: Período de fechas
         self._create_date_range_selector(panel)
         
-        # Bloque 3: Técnicos arrastrables
+        # Bloque 3: Tipo de guardia
+        self._create_guardia_type_selector(panel)
+        
+        # Bloque 4: Técnicos arrastrables
         self._create_technicians_grid(panel)
     
     def _create_last_tech_selector(self, parent):
@@ -125,6 +129,22 @@ class GeneratorTab(tk.Frame):
         tk.Entry(frame, textvariable=self.fecha_fin_var,
                 font=("Arial", 8), width=10).grid(row=1, column=1, padx=2, pady=1)
     
+    def _create_guardia_type_selector(self, parent):
+        """Crea selector de tipo de guardia"""
+        block = tk.LabelFrame(parent, text="Tipo guardia",
+                             font=("Arial", 8, "bold"), bg="#ecf0f1",
+                             relief=tk.RIDGE, bd=2)
+        block.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH)
+        
+        self.tipo_guardia_var = tk.StringVar(value='guardia')
+        
+        tk.Radiobutton(block, text="Completa", variable=self.tipo_guardia_var,
+                      value='guardia', bg="#ecf0f1",
+                      font=("Arial", 8)).pack(anchor="w", padx=5, pady=2)
+        tk.Radiobutton(block, text="Media", variable=self.tipo_guardia_var,
+                      value='media_guardia', bg="#ecf0f1",
+                      font=("Arial", 8)).pack(anchor="w", padx=5, pady=2)
+    
     def _create_technicians_grid(self, parent):
         """Crea grid de técnicos arrastrables"""
         block = tk.LabelFrame(parent, text="Técnicos (arrastra al calendario)",
@@ -187,7 +207,7 @@ class GeneratorTab(tk.Frame):
     def _create_stats_panel(self):
         """Crea el panel de estadísticas y botones de acción"""
         # Contador de guardias
-        counter_frame = tk.LabelFrame(self.stats_container, text="📊 Guardias del mes", 
+        counter_frame = tk.LabelFrame(self.stats_container, text="Guardias del mes", 
                                      font=("Arial", 10, "bold"), bg="#ecf0f1",
                                      relief=tk.RIDGE, bd=2)
         counter_frame.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
@@ -212,15 +232,15 @@ class GeneratorTab(tk.Frame):
         actions = tk.Frame(self.stats_container, bg="#ecf0f1")
         actions.pack(side=tk.BOTTOM, pady=10, padx=10, fill=tk.X)
         
-        tk.Button(actions, text="🔄 Auto-asignar", command=self._auto_assign,
+        tk.Button(actions, text="Auto-asignar", command=self._auto_assign,
                  bg="#3498db", fg="white", font=("Arial", 10, "bold"),
                  relief=tk.RAISED, bd=3, cursor="hand2", pady=6).pack(fill=tk.X, pady=3)
         
-        tk.Button(actions, text="🗑️ Limpiar", command=self._clear_assignments,
+        tk.Button(actions, text="Limpiar", command=self._clear_assignments,
                  bg="#e74c3c", fg="white", font=("Arial", 10, "bold"),
                  relief=tk.RAISED, bd=3, cursor="hand2", pady=6).pack(fill=tk.X, pady=3)
         
-        tk.Button(actions, text="💾 Exportar CSV", command=self._export_csv,
+        tk.Button(actions, text="Exportar CSV", command=self._export_csv,
                  bg="#2ecc71", fg="white", font=("Arial", 11, "bold"),
                  relief=tk.RAISED, bd=3, cursor="hand2", pady=8).pack(fill=tk.X, pady=3)
     
@@ -286,32 +306,35 @@ class GeneratorTab(tk.Frame):
         
         if is_holiday:
             festivo_text = self.festivos[fecha] if self.festivos[fecha] else "Festivo"
-            tk.Label(header, text=f"🎉{festivo_text}", font=("Arial", 7),
+            tk.Label(header, text=f"{festivo_text}", font=("Arial", 7),
                     bg=bg_color, fg="#856404").pack(side=tk.RIGHT)
         
-        # Zona de asignación (solo fines de semana y festivos laborables)
-        if is_weekend or (is_holiday and weekday < 5):
-            drop_frame = tk.Frame(frame, bg=bg_color, relief=tk.SUNKEN, bd=1)
-            drop_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-            drop_frame.fecha_asignada = fecha
-            frame.fecha_asignada = fecha
-            
-            if fecha in self.asignaciones:
-                tecnico = self.asignaciones[fecha]['tecnico']
-                color = self.asignaciones[fecha]['color']
-                lbl = tk.Label(drop_frame, text=tecnico, font=("Arial", 10, "bold"),
-                              bg=color, fg="white", relief=tk.RAISED, bd=2, pady=5)
-                lbl.pack(fill=tk.BOTH, expand=True)
-                lbl.bind("<Double-Button-1>", lambda e, f=fecha: self._remove_assignment(f))
-                lbl.fecha_asignada = fecha
-            else:
-                placeholder = tk.Label(drop_frame, text="Arrastra\naquí",
-                                      font=("Arial", 9), bg=bg_color, fg="#999")
-                placeholder.pack(fill=tk.BOTH, expand=True)
-                placeholder.fecha_asignada = fecha
-            
-            drop_frame.bind("<ButtonRelease-1>", lambda e, f=fecha: self._drop_technician(e, f))
-            frame.bind("<ButtonRelease-1>", lambda e, f=fecha: self._drop_technician(e, f))
+        # Zona de asignación para todos los días
+        is_assignable = is_weekend or (is_holiday and weekday < 5)
+        drop_frame = tk.Frame(frame, bg=bg_color,
+                             relief=tk.SUNKEN if is_assignable else tk.FLAT, bd=1)
+        drop_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        drop_frame.fecha_asignada = fecha
+        frame.fecha_asignada = fecha
+        
+        if fecha in self.asignaciones:
+            tecnico = self.asignaciones[fecha]['tecnico']
+            color = self.asignaciones[fecha]['color']
+            tipo = self.asignaciones[fecha].get('tipo', 'guardia')
+            display_text = f"½ {tecnico}" if tipo == 'media_guardia' else tecnico
+            lbl = tk.Label(drop_frame, text=display_text, font=("Arial", 10, "bold"),
+                          bg=color, fg="white", relief=tk.RAISED, bd=2, pady=5)
+            lbl.pack(fill=tk.BOTH, expand=True)
+            lbl.bind("<Button-1>", lambda e, f=fecha: self._remove_assignment(f))
+            lbl.fecha_asignada = fecha
+        elif is_assignable:
+            placeholder = tk.Label(drop_frame, text="Arrastra\naquí",
+                                  font=("Arial", 9), bg=bg_color, fg="#999")
+            placeholder.pack(fill=tk.BOTH, expand=True)
+            placeholder.fecha_asignada = fecha
+        
+        drop_frame.bind("<ButtonRelease-1>", lambda e, f=fecha: self._drop_technician(e, f))
+        frame.bind("<ButtonRelease-1>", lambda e, f=fecha: self._drop_technician(e, f))
         
         frame.grid(row=row, column=col, sticky="nsew", padx=1, pady=1)
     
@@ -359,9 +382,17 @@ class GeneratorTab(tk.Frame):
                     self.dragging = None
                     return
             
+            tipo = self.tipo_guardia_var.get()
+            prefix = "Media Guardia" if tipo == 'media_guardia' else "Guardia"
+            anotacion = self.festivos.get(fecha, "")
+            subject_base = f"{prefix} {anotacion}".strip() if anotacion else prefix
+            subject = f"{subject_base} - {self.dragging['tecnico']}"
+            
             self.asignaciones[fecha] = {
                 'tecnico': self.dragging['tecnico'],
-                'color': self.dragging['color']
+                'color': self.dragging['color'],
+                'tipo': tipo,
+                'subject': subject
             }
             self.dragging = None
             self._draw_calendar()
@@ -376,9 +407,17 @@ class GeneratorTab(tk.Frame):
                     f"Este festivo cae en fin de semana.\n¿Asignar guardia de fin de semana a {self.dragging['tecnico']}?"):
                     return
             
+            tipo = self.tipo_guardia_var.get()
+            prefix = "Media Guardia" if tipo == 'media_guardia' else "Guardia"
+            anotacion = self.festivos.get(fecha, "")
+            subject_base = f"{prefix} {anotacion}".strip() if anotacion else prefix
+            subject = f"{subject_base} - {self.dragging['tecnico']}"
+            
             self.asignaciones[fecha] = {
                 'tecnico': self.dragging['tecnico'],
-                'color': self.dragging['color']
+                'color': self.dragging['color'],
+                'tipo': tipo,
+                'subject': subject
             }
             self._draw_calendar()
     
@@ -401,9 +440,9 @@ class GeneratorTab(tk.Frame):
                 if tecnico not in counter:
                     counter[tecnico] = {'dias': [], 'total': 0}
                 
-                es_tarde = fecha in self.festivos and "TARDE" in self.festivos[fecha].upper()
+                tipo = datos.get('tipo', 'guardia')
                 counter[tecnico]['dias'].append(fecha.day)
-                counter[tecnico]['total'] += 0.5 if es_tarde else 1
+                counter[tecnico]['total'] += 0.5 if tipo == 'media_guardia' else 1
         
         if not counter:
             tk.Label(self.stats_frame, text="Sin guardias este mes",
@@ -537,7 +576,8 @@ class GeneratorTab(tk.Frame):
                 tecnico = self.tecnicos[indice_tecnico]
                 color = self.colors.get(tecnico, "#3498db")  # Color desde archivo
                 for dia in bloque:
-                    self.asignaciones[dia] = {'tecnico': tecnico, 'color': color}
+                    self.asignaciones[dia] = {'tecnico': tecnico, 'color': color, 'tipo': 'guardia',
+                                              'subject': f"Guardia - {tecnico}"}
                 ultimo_tecnico_asignado = tecnico
                 indice_tecnico = (indice_tecnico + 1) % len(self.tecnicos)
             
@@ -545,7 +585,8 @@ class GeneratorTab(tk.Frame):
                 tecnico = self.tecnicos[indice_tecnico]
                 color = self.colors.get(tecnico, "#3498db")  # Color desde archivo
                 for dia in bloque:
-                    self.asignaciones[dia] = {'tecnico': tecnico, 'color': color}
+                    self.asignaciones[dia] = {'tecnico': tecnico, 'color': color, 'tipo': 'guardia',
+                                              'subject': f"Guardia - {tecnico}"}
                 ultimo_tecnico_asignado = tecnico
                 indice_tecnico = (indice_tecnico + 1) % len(self.tecnicos)
             
@@ -560,7 +601,9 @@ class GeneratorTab(tk.Frame):
                     
                     dias_asignar = min(2, num_dias - i)
                     for j in range(dias_asignar):
-                        self.asignaciones[bloque[i + j]] = {'tecnico': tecnico, 'color': color}
+                        self.asignaciones[bloque[i + j]] = {'tecnico': tecnico, 'color': color,
+                                                             'tipo': 'guardia',
+                                                             'subject': f"Guardia - {tecnico}"}
                     
                     ultimo_tecnico_asignado = tecnico
                     i += dias_asignar
@@ -584,29 +627,28 @@ class GeneratorTab(tk.Frame):
         while i < len(asignaciones_ordenadas):
             fecha, datos = asignaciones_ordenadas[i]
             tecnico = datos['tecnico']
+            subject_dia = datos.get('subject', f"Guardia - {tecnico}")
             
             if fecha.weekday() == 5:
                 fecha_domingo = fecha + timedelta(days=1)
                 if i + 1 < len(asignaciones_ordenadas):
                     siguiente_fecha, siguiente_datos = asignaciones_ordenadas[i + 1]
-                    if siguiente_fecha == fecha_domingo and siguiente_datos['tecnico'] == tecnico:
+                    if siguiente_fecha == fecha_domingo and siguiente_datos['tecnico'] == tecnico \
+                            and siguiente_datos.get('tipo', 'guardia') == datos.get('tipo', 'guardia'):
                         eventos.append({
                             'fecha_inicio': fecha,
                             'fecha_fin': fecha_domingo,
                             'tecnico': tecnico,
-                            'subject': f"Guardia - {tecnico}"
+                            'subject': subject_dia
                         })
                         i += 2
                         continue
-            
-            anotacion = self.festivos.get(fecha, "")
-            subject = f"Guardia {anotacion} - {tecnico}" if anotacion else f"Guardia - {tecnico}"
             
             eventos.append({
                 'fecha_inicio': fecha,
                 'fecha_fin': fecha,
                 'tecnico': tecnico,
-                'subject': subject
+                'subject': subject_dia
             })
             i += 1
         

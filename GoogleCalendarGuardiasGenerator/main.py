@@ -4,8 +4,21 @@ Punto de entrada de la aplicación - Gestor de Guardias con pestañas
 
 import tkinter as tk
 from tkinter import ttk
+import logging
 from ui.generator_tab import GeneratorTab
 from ui.viewer_tab import ViewerTab
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('guardias_app.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
 
 
 class GuardiasApplication:
@@ -47,17 +60,19 @@ class GuardiasApplication:
         
         # Pestaña 1: Generador
         self.generator_tab = GeneratorTab(self.notebook)
-        self.notebook.add(self.generator_tab, text="🔧 Generar Guardias")
+        self.notebook.add(self.generator_tab, text="Generar Guardias")
         
         # Pestaña 2: Visor de calendarios
         self.viewer_tab = ViewerTab(self.notebook)
-        self.notebook.add(self.viewer_tab, text="📖 Ver Calendarios")
+        self.notebook.add(self.viewer_tab, text="Ver Calendarios")
 
 
 def main():
     """Función principal"""
+    logger.info("Iniciando aplicación Gestor de Guardias...")
     root = tk.Tk()
     app = GuardiasApplication(root)
+    logger.info("Aplicación lista")
     root.mainloop()
 
 

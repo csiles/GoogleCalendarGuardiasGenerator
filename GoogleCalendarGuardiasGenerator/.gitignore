@@ -29,6 +29,11 @@ guardias-support.csv
 # JSON data (calendarios persistidos)
 json/calendarios.json
 json/google_token.json
+json/google_credentials.json
+json/google_config.json
+
+# Logs
+*.log
 
 # IDE
 .vscode/

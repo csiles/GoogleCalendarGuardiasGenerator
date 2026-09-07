@@ -215,7 +215,7 @@ class CalendarManager:
         
         Args:
             fecha: Fecha en formato YYYY-MM-DD
-            evento: Diccionario con datos del evento
+            evento: Diccionario con datos del evento (puede incluir google_event_id)
             
         Returns:
             bool: True si se añadió, False si ya existía
@@ -261,6 +261,50 @@ class CalendarManager:
             month_data['estadisticas_mes']['por_tipo'].get(tipo, 0) + 1
             
         return True
+    
+    def update_google_event_id(self, fecha: str, event_id: str, google_event_id: str, google_link: str = None):
+        """
+        Actualiza el google_event_id de un evento específico.
+        
+        Args:
+            fecha: Fecha en formato YYYY-MM-DD
+            event_id: ID interno del evento
+            google_event_id: ID del evento en Google Calendar
+            google_link: URL del evento en Google Calendar (opcional)
+        """
+        year_month = fecha[:7]
+        day = fecha[8:10]
+        
+        if year_month in self.data['meses']:
+            month_data = self.data['meses'][year_month]
+            if day in month_data['dias']:
+                for evento in month_data['dias'][day]['eventos']:
+                    if evento.get('id') == event_id:
+                        evento['google_event_id'] = google_event_id
+                        if google_link:
+                            evento['google_link'] = google_link
+                        logger.debug(f"Actualizado google_event_id para {event_id}")
+                        return
+        
+        logger.warning(f"No se encontró evento {event_id} en fecha {fecha}")
+    
+    def get_all_events(self) -> List[dict]:
+        """
+        Obtiene todos los eventos de todos los meses.
+        
+        Returns:
+            List[dict]: Lista de todos los eventos con su fecha
+        """
+        all_events = []
+        
+        for year_month, month_data in self.data['meses'].items():
+            for day, day_data in month_data['dias'].items():
+                for evento in day_data['eventos']:
+                    evento_copy = evento.copy()
+                    evento_copy['fecha'] = f"{year_month}-{day}"
+                    all_events.append(evento_copy)
+        
+        return all_events
         
     def get_month_view(self, year: int, month: int) -> dict:
         """

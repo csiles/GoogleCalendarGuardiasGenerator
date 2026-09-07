@@ -74,7 +74,7 @@ class MultiMonthViewer(tk.Frame):
             right_nav = tk.Frame(nav_frame, bg="#34495e")
             right_nav.pack(side=tk.RIGHT, padx=10, pady=10)
             
-            tk.Label(right_nav, text="👤 Técnicos:", bg="#34495e", fg="white",
+            tk.Label(right_nav, text="Tecnicos:", bg="#34495e", fg="white",
                     font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=5)
             
             # Obtener técnicos del parent_tab
@@ -200,7 +200,7 @@ class MultiMonthViewer(tk.Frame):
             # Actualizar status bar del padre si existe
             if self.parent_tab and hasattr(self.parent_tab, 'status_label'):
                 self.parent_tab.status_label.config(
-                    text=f"✅ Guardia asignada a {self.dragging['tecnico']} el {fecha}",
+                    text=f"Guardia asignada a {self.dragging['tecnico']} el {fecha}",
                     bg="#2ecc71", fg="white"
                 )
             
@@ -223,18 +223,75 @@ class MultiMonthViewer(tk.Frame):
         # Eliminar eventos del día
         if year_month in self.calendar_manager.data['meses']:
             if day_str in self.calendar_manager.data['meses'][year_month]['dias']:
+                eventos_dia = self.calendar_manager.data['meses'][year_month]['dias'][day_str]['eventos']
+                
+                # Eliminar de Google Calendar si los eventos están sincronizados
+                if self.parent_tab and hasattr(self.parent_tab, 'google_sync'):
+                    google_sync = self.parent_tab.google_sync
+                    if google_sync.is_configured() and google_sync.service:
+                        for ev in eventos_dia:
+                            gid = ev.get('google_event_id')
+                            if gid:
+                                try:
+                                    google_sync.delete_event(gid)
+                                except Exception as e:
+                                    logger.warning(f"No se pudo eliminar de Google Calendar: {e}")
+                
                 self.calendar_manager.data['meses'][year_month]['dias'][day_str]['eventos'] = []
                 self.calendar_manager.save_data()
                 
                 # Actualizar status bar
                 if self.parent_tab and hasattr(self.parent_tab, 'status_label'):
                     self.parent_tab.status_label.config(
-                        text=f"🗑️ Guardia eliminada del {fecha}",
+                        text=f"Guardia eliminada del {fecha}",
                         bg="#e74c3c", fg="white"
                     )
                 
                 # Refrescar vista
                 self.refresh()
+    
+    def _delete_month_events(self, year: int, month: int):
+        """Elimina todos los eventos de un mes completo"""
+        year_month = f"{year:04d}-{month:02d}"
+        month_name = datetime(year, month, 1).strftime('%B %Y')
+        
+        if not messagebox.askyesno(
+            "Confirmar",
+            f"¿Borrar todas las guardias de {month_name}?\n\n"
+            f"Esta acción también eliminará los eventos de Google Calendar si están sincronizados."
+        ):
+            return
+        
+        # Eliminar de Google Calendar si está sincronizado
+        if self.parent_tab and hasattr(self.parent_tab, 'google_sync'):
+            google_sync = self.parent_tab.google_sync
+            if google_sync.is_configured() and google_sync.service:
+                if year_month in self.calendar_manager.data['meses']:
+                    for day_data in self.calendar_manager.data['meses'][year_month]['dias'].values():
+                        for ev in day_data.get('eventos', []):
+                            gid = ev.get('google_event_id')
+                            if gid:
+                                try:
+                                    google_sync.delete_event(gid)
+                                except Exception as e:
+                                    logger.warning(f"No se pudo eliminar de Google Calendar: {e}")
+        
+        # Limpiar datos del mes
+        if year_month in self.calendar_manager.data['meses']:
+            self.calendar_manager.data['meses'][year_month]['dias'] = {}
+            self.calendar_manager.data['meses'][year_month]['estadisticas_mes'] = {
+                'total_eventos': 0,
+                'por_tipo': {}
+            }
+            self.calendar_manager.save_data()
+        
+        if self.parent_tab and hasattr(self.parent_tab, 'status_label'):
+            self.parent_tab.status_label.config(
+                text=f"Guardias de {month_name} eliminadas",
+                bg="#e74c3c", fg="white"
+            )
+        
+        self.refresh()
     
     def refresh(self):
         """Refresca la visualización de meses"""
@@ -282,12 +339,23 @@ class MultiMonthViewer(tk.Frame):
         Returns:
             Frame con la visualización del mes
         """
+        year = month_data['year']
+        month = month_data['month']
+
         frame = tk.LabelFrame(self.scrollable_frame, 
                              text=month_data['month_name'],
                              font=("Arial", 11, "bold"),
                              bg="white",
                              relief=tk.RAISED,
                              bd=2)
+        
+        # Barra de acciones del mes
+        actions_bar = tk.Frame(frame, bg="white")
+        actions_bar.pack(fill=tk.X, padx=5, pady=(2, 0))
+        tk.Button(actions_bar, text="Borrar mes",
+                 command=lambda y=year, m=month: self._delete_month_events(y, m),
+                 bg="#e74c3c", fg="white", font=("Arial", 8),
+                 relief=tk.RAISED, bd=1, cursor="hand2").pack(side=tk.RIGHT, padx=2, pady=2)
         
         # Contenedor principal con dos secciones: calendario y estadísticas
         main_container = tk.Frame(frame, bg="white")
@@ -305,8 +373,6 @@ class MultiMonthViewer(tk.Frame):
                     bg=bg_color, fg="white", width=8).grid(row=0, column=col, sticky="ew", padx=1, pady=1)
         
         # Obtener días del mes
-        year = month_data['year']
-        month = month_data['month']
         cal_matrix = cal.monthcalendar(year, month)
         
         # Renderizar días
