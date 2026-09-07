@@ -226,23 +226,9 @@ class MultiMonthViewer(tk.Frame):
         year_month = fecha[:7]
         day_str = fecha[8:10]
         
-        # Eliminar eventos del día
+        # Eliminar eventos del día (solo local; no se toca Google hasta una sincro explícita)
         if year_month in self.calendar_manager.data['meses']:
             if day_str in self.calendar_manager.data['meses'][year_month]['dias']:
-                eventos_dia = self.calendar_manager.data['meses'][year_month]['dias'][day_str]['eventos']
-                
-                # Eliminar de Google Calendar si los eventos están sincronizados
-                if self.parent_tab and hasattr(self.parent_tab, 'google_sync'):
-                    google_sync = self.parent_tab.google_sync
-                    if google_sync.is_configured() and google_sync.service:
-                        for ev in eventos_dia:
-                            gid = ev.get('google_event_id')
-                            if gid:
-                                try:
-                                    google_sync.delete_event(gid)
-                                except Exception as e:
-                                    logger.warning(f"No se pudo eliminar de Google Calendar: {e}")
-                
                 self.calendar_manager.data['meses'][year_month]['dias'][day_str]['eventos'] = []
                 self.calendar_manager.save_data()
                 
@@ -264,25 +250,12 @@ class MultiMonthViewer(tk.Frame):
         if not messagebox.askyesno(
             "Confirmar",
             f"¿Borrar todas las guardias de {month_name}?\n\n"
-            f"Esta acción también eliminará los eventos de Google Calendar si están sincronizados."
+            f"Esto solo afecta al calendario local; los eventos ya sincronizados con Google Calendar "
+            f"no se eliminarán hasta que hagas una sincronización explícita."
         ):
             return
         
-        # Eliminar de Google Calendar si está sincronizado
-        if self.parent_tab and hasattr(self.parent_tab, 'google_sync'):
-            google_sync = self.parent_tab.google_sync
-            if google_sync.is_configured() and google_sync.service:
-                if year_month in self.calendar_manager.data['meses']:
-                    for day_data in self.calendar_manager.data['meses'][year_month]['dias'].values():
-                        for ev in day_data.get('eventos', []):
-                            gid = ev.get('google_event_id')
-                            if gid:
-                                try:
-                                    google_sync.delete_event(gid)
-                                except Exception as e:
-                                    logger.warning(f"No se pudo eliminar de Google Calendar: {e}")
-        
-        # Limpiar datos del mes
+        # Limpiar datos del mes (solo local; no se toca Google hasta una sincro explícita)
         if year_month in self.calendar_manager.data['meses']:
             self.calendar_manager.data['meses'][year_month]['dias'] = {}
             self.calendar_manager.data['meses'][year_month]['estadisticas_mes'] = {
