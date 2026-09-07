@@ -333,9 +333,10 @@ class ViewerTab(tk.Frame):
         thread.start()
     
     def _get_pull_date_range(self):
-        """Rango fijo de descarga desde Google: siempre los últimos 12 meses hasta hoy"""
-        end = datetime.now()
-        start = end - timedelta(days=365)
+        """Rango fijo de descarga desde Google: 12 meses atrás y 6 meses hacia delante desde hoy"""
+        now = datetime.now()
+        start = now - timedelta(days=365)
+        end = now + timedelta(days=180)
         return start, end
     
     def _sync_from_google(self):
@@ -353,7 +354,7 @@ class ViewerTab(tk.Frame):
         confirm = messagebox.askyesno(
             "Confirmar sincronización",
             "¿Deseas descargar los eventos de Google Calendar hacia el calendario local?\n\n"
-            f"Rango: {time_min.strftime('%Y-%m-%d')} a {time_max.strftime('%Y-%m-%d')} (últimos 12 meses)\n"
+            f"Rango: {time_min.strftime('%Y-%m-%d')} a {time_max.strftime('%Y-%m-%d')} (12 meses atrás, 6 meses adelante)\n"
             "Se importarán tal cual vengan de Google."
         )
         
