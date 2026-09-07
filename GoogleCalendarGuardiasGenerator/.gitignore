@@ -26,11 +26,21 @@ wheels/
 # CSV generados
 guardias-support.csv
 
-# JSON data (calendarios persistidos)
-json/calendarios.json
-json/google_token.json
-json/google_credentials.json
-json/google_config.json
+# JSON data (calendarios persistidos) - app de escritorio
+desktop/json/calendarios.json
+desktop/json/google_token.json
+desktop/json/google_credentials.json
+desktop/json/google_config.json
+
+# Datos y secretos - webapp
+webapp/server/data/calendarios.json
+webapp/server/data/google_token.json
+webapp/server/data/google_credentials.json
+webapp/server/data/google_config.json
+
+# Node
+node_modules/
+dist/
 
 # Logs
 *.log
